@@ -627,7 +627,9 @@ do_format() {
       ;;
     btrfs)
       mkfs.btrfs -f "$ROOT_PART" >> "$LOG_FILE" 2>&1
-      # Create subvolumes — fix #2
+      # Wait for device to be ready before temporary mount
+      udevadm settle 2>/dev/null || true
+      sleep 2
       mount "$ROOT_PART" /mnt/gentoo
       btrfs subvolume create /mnt/gentoo/@          >> "$LOG_FILE" 2>&1
       btrfs subvolume create /mnt/gentoo/@home      >> "$LOG_FILE" 2>&1
@@ -672,15 +674,35 @@ do_format() {
 # ──────────────────────────────────────────────
 # INSTALL: MOUNT  (Btrfs-aware — fix #2)
 # ──────────────────────────────────────────────
+_wait_for_dev() {
+  # Wait up to 15 seconds for a block device to become available
+  local dev="$1" tries=0
+  while [[ ! -b "$dev" ]]; do
+    tries=$(( tries + 1 ))
+    [[ $tries -gt 15 ]] && die "Device $dev did not appear after 15 seconds."
+    info "Waiting for $dev … (${tries}s)"
+    udevadm settle 2>/dev/null || true
+    sleep 1
+  done
+  # Extra settle after device appears
+  udevadm settle 2>/dev/null || true
+  sleep 1
+}
+
 do_mount() {
   info "Mounting filesystems …"
-  # Ensure block devices are fully visible — critical in VMs without full udevd
-  udevadm settle 2>/dev/null || true
+
+  # Force kernel to re-read partition table and wait for devices
   partprobe "$DISK" 2>/dev/null || true
-  sleep 1
+  udevadm settle 2>/dev/null || true
+  sleep 2
+
+  # Wait until the actual device nodes exist before mounting
+  _wait_for_dev "$ROOT_PART"
+  _wait_for_dev "$BOOT_PART"
+  [[ -n "$SWAP_PART" ]] && _wait_for_dev "$SWAP_PART"
 
   if [[ "$FS_TYPE" == "btrfs" ]]; then
-    # Mount the @ subvolume as root
     mount -o subvol=@,compress=zstd,noatime "$ROOT_PART" /mnt/gentoo
     mkdir -p /mnt/gentoo/{home,.snapshots,var/cache}
     mount -o subvol=@home,compress=zstd,noatime       "$ROOT_PART" /mnt/gentoo/home
