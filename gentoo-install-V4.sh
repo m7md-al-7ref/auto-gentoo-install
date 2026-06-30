@@ -1087,7 +1087,8 @@ RESUMING=0
 check_resume() {
   [[ -f "$STATE_FILE" ]] || return 0
   local completed
-  completed=$(grep -c '^STEP_.*=done' "$STATE_FILE" 2>/dev/null || echo 0)
+  completed=$(grep -c '^STEP_.*=done' "$STATE_FILE" 2>/dev/null) || completed=0
+  completed=$(( completed + 0 ))
   [[ "$completed" -eq 0 ]] && return 0
 
   local done_list
