@@ -1358,19 +1358,16 @@ main() {
 
   # ── Installation (each step skips if checkpoint exists) ──
   if ! step_is_done PARTITION; then
-    gauge_phase "Preparing Disk" \
-      "Partitioning ${DISK} …" 100 "do_partition"
+    dialog --title "Preparing Disk" --infobox "\nPartitioning ${DISK} …" 6 46
+    do_partition
+    # Save partition names to state immediately after
+    save_state
     step_done PARTITION
   fi
 
   if ! step_is_done FORMAT; then
-    gauge_phase "Formatting" \
-      "Formatting boot partition …" 40 \
-        "( [[ $BOOT_MODE == uefi ]] && mkfs.fat -F32 '$BOOT_PART' || mkfs.ext2 -F '$BOOT_PART' )" \
-      "Formatting root partition …" 90 \
-        "_do_format_root" \
-      "Setting up swap …"          100 \
-        "( [[ -n '$SWAP_PART' ]] && mkswap '$SWAP_PART' && swapon '$SWAP_PART' || true )"
+    dialog --title "Formatting" --infobox "\nFormatting partitions …" 6 46
+    do_format
     step_done FORMAT
   fi
 
